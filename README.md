@@ -26,8 +26,19 @@ HELLO STEM/嘉年创奇 **ESP32-S3 MOC 2.0** 开发板（生产商：惠州市�
 │   ├── esptool.exe          乐鑫官方烧录工具独立版 v5.3.1
 │   ├── factory_full_4M.bin  出厂固件镜像
 │   └── 使用说明.txt
-└── docs/                    板卡引脚表与调研结论
+├── caixukun_ascii/          串口 ASCII 动画项目（MicroPython，视频转字符画循环播放）
+│   ├── main.py              板端播放器（开机自动播放，REPL Ctrl-C 打断）
+│   ├── viewer.py            电脑端串口播放器（自动找 COM 口）
+│   ├── 启动动画.bat          双击看动画
+│   └── convert_to_ascii.py  视频 → ASCII 帧包转换器（本地使用）
+└── docs/                    板卡引脚表、调研结论、踩坑记录与操作规范
 ```
+
+## 快速上手
+
+- **看动画**：双击 `caixukun_ascii/启动动画.bat`（需先 USB 连板）
+- **恢复出厂**：双击 `one_click_restore/一键恢复.bat`
+- **踩坑速查**：[docs/踩坑记录与操作规范.md](docs/踩坑记录与操作规范.md)（CDC 挂死、UART 重建限制、串口丢包等 7 个坑的根因与 SOP）
 
 ## 一键恢复出厂
 

@@ -1,0 +1,9 @@
+# 版权敏感/大文件禁止入库
+frames.bin
+*.mp4
+*.bin
+!factory_backup/factory_full_4M.bin
+!one_click_restore/factory_full_4M.bin
+!one_click_restore/esptool.exe
+capture*.bin
+__pycache__/

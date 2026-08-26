@@ -31,8 +31,11 @@ HELLO STEM/嘉年创奇 **ESP32-S3 MOC 2.0** 开发板（生产商：惠州市�
 │   ├── viewer.py            电脑端串口播放器（自动找 COM 口）
 │   ├── 启动动画.bat          双击看动画
 │   └── convert_to_ascii.py  视频 → ASCII 帧包转换器（本地使用）
+├── third_party/esp32-edu/   韩国教育机构配套课程（git subtree 合并，含板子标注实拍图）
 └── docs/                    板卡引脚表、调研结论、踩坑记录与操作规范
 ```
+
+> **第三方来源声明**：`third_party/esp32-edu` 来自 [parkdongbae-afk/esp32-edu](https://github.com/parkdongbae-afk/esp32-edu)（韩国中学 ESP32-S3-MOC 教学项目，git subtree 合并，版权归原作者；该仓库未见 LICENSE 文件，仅作学习研究用途引用）。
 
 ## 快速上手
 

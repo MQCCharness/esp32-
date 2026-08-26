@@ -5,6 +5,19 @@
 > 该课程使用的板卡与 HELLO STEM/嘉年创奇 ESP32-S3 MOC 为同一产品线。
 > 使用前请与板上丝印核对一次。
 
+## 板载硬件（来源：课程仓库标注图 `third_party/esp32-edu/public/photos/ESP32-S3-MOC-설명.png` + 实测）
+
+| 部件 | 说明 |
+|------|------|
+| **板载 RGB LED** | **WS2812 全彩灯，GPIO38**（丝印+标注图+neopixel 实测三重确认） |
+| BOOT 按键 | GPIO0（进下载模式用） |
+| RESET 按键 | EN 复位 |
+| USB1 口（丝印 USUART） | CH340K USB 转串口 → 电脑枚举 COM4（烧录/REPL 救命通道） |
+| USB2 口（丝印 OTG） | ESP32-S3 原生 USB → 枚举 COM3/COM5（MicroPython REPL/OTG） |
+| 供电 | USB / 3.3V 排针 / 外部 6–9V / 3.7V 2.5A / 5V 1A / **7.4V 锂电池接口** |
+| 模组 | ESP32-S3 **N16R8**（16MB Flash + 8MB PSRAM，与 eFuse/flash-id 实测一致） |
+| 双排扩展接口 | 上排 GPIO0–16，下排 GPIO17/18/21/38/39/40/41/42/45/47/48 + 电源排 |
+
 ## 传感器 / 执行器标准接线
 
 | 外设 | 信号 | GPIO | 接口类型 |

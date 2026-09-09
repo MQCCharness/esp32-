@@ -7,3 +7,6 @@ frames.bin
 !one_click_restore/esptool.exe
 capture*.bin
 __pycache__/
+
+# 真实凭据版本不进仓库
+esp32_chat/chat_local.py

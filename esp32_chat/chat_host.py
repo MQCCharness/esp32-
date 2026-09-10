@@ -76,8 +76,9 @@ def ask_on_board(question):
 
 
 print("=" * 52)
-print("  ESP32-S3 AI 终端  ·  %s @115200  ·  mimo-v2.5" % PORT)
-print("  输入任意问题回车发送 /q 退出 /w 重连Wi-Fi")
+print("  ESP32-S3 AI 终端  ·  %s @115200" % PORT)
+print("  输入任意问题回车发送  /new 清空上下文")
+print("  /w 重连Wi-Fi  /q 退出")
 print("=" * 52)
 
 if not ensure_repl():
@@ -85,13 +86,15 @@ if not ensure_repl():
     sys.exit(1)
 
 cmd("import chat, network")
-r = cmd("w=network.WLAN(network.STA_IF); w.active(True); print(w.isconnected())", 0.6)
+r = cmd("print(chat.CONFIG['model'], network.WLAN(network.STA_IF).isconnected())", 0.6)
+print("[i] 模型:", r.decode(errors="replace").strip().split("\r\n")[0].strip()[:40])
 if b"False" in r:
     print("[i] 重新连接 Wi-Fi ...")
-    cmd("w.connect(chat.CONFIG['wifi_ssid'], chat.CONFIG['wifi_pass'])", 0.5)
+    cmd("network.WLAN(network.STA_IF).active(True)", 0.3)
+    cmd("chat.connect_wifi()", 0.5)
     t0 = time.time()
     while time.time() - t0 < 25:
-        if b"True" in cmd("print(w.isconnected())", 0.8):
+        if b"True" in cmd("print(network.WLAN(network.STA_IF).isconnected())", 0.8):
             break
 
 while True:
@@ -103,11 +106,15 @@ while True:
         continue
     if q == "/q":
         break
+    if q == "/new":
+        cmd("print(chat.reset_history())", 0.5)
+        print("[i] 上下文已清空")
+        continue
     if q == "/w":
-        cmd("w.disconnect(); w.connect(chat.CONFIG['wifi_ssid'], chat.CONFIG['wifi_pass'])", 0.5)
+        cmd("network.WLAN(network.STA_IF).disconnect(); chat.connect_wifi()", 0.5)
         t0 = time.time()
         while time.time() - t0 < 20:
-            if b"True" in cmd("print(w.isconnected())", 0.8):
+            if b"True" in cmd("print(network.WLAN(network.STA_IF).isconnected())", 0.8):
                 print("[i] Wi-Fi 已重连")
                 break
         continue

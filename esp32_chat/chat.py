@@ -105,15 +105,31 @@ def ask(messages):
 
 
 def ask_b64(b64_text):
-    """中文经串口 REPL 会被吞，用 base64 传输：电脑端编码、板端解码"""
+    """中文经串口 REPL 会被吞，用 base64 传输：电脑端编码、板端解码
+    自动维护多轮上下文（HISTORY），/new 可清空"""
     import ubinascii
     q = ubinascii.a2b_base64(b64_text).decode()
-    return ask([{"role": "user", "content": q}])
+    global HISTORY
+    HISTORY.append({"role": "user", "content": q})
+    ans = ask(HISTORY[-(HISTORY_MAX * 2):])
+    HISTORY.append({"role": "assistant", "content": ans})
+    HISTORY = HISTORY[-(HISTORY_MAX * 2):]
+    return ans
+
+
+HISTORY = []
+
+
+def reset_history():
+    """清空对话上下文"""
+    global HISTORY
+    HISTORY = []
+    return "历史已清空"
 
 
 def run():
     connect_wifi()
-    history = []
+    reset_history()
     print("\n=== ESP32 AI 终端已启动 (%s / %s) ===" % (CONFIG["protocol"], CONFIG["model"]))
     print("=== 输入 /quit 退出 /new 清空历史 ===\n")
     while True:
@@ -128,18 +144,18 @@ def run():
             if q == "/quit":
                 break
             if q == "/new":
-                history = []
+                reset_history()
                 print("（历史已清空）")
                 continue
-            history.append({"role": "user", "content": q})
+            HISTORY.append({"role": "user", "content": q})
             print("AI: ", end="")
             try:
-                ans = ask(history[-(HISTORY_MAX * 2):])
+                ans = ask(HISTORY[-(HISTORY_MAX * 2):])
             except Exception as e:
                 ans = "[请求失败] " + str(e)[:150]
             print(ans)
-            history.append({"role": "assistant", "content": ans})
-            history = history[-(HISTORY_MAX * 2):]
+            HISTORY.append({"role": "assistant", "content": ans})
+            HISTORY = HISTORY[-(HISTORY_MAX * 2):]
         except KeyboardInterrupt:
             print("\n（已退出对话）")
             break

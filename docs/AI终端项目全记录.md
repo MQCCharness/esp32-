@@ -1,7 +1,9 @@
 # 把 ESP32 变成最便宜的 AI 终端 · 项目全记录
 
 > 硬件成本：**0 元**（手头闲置的教育开发板）｜门槛：一根 USB 线 + 手机热点
-> 成果：ESP32-S3 直连大模型 API（mimo-v2.5 推理模型），串口实时中英文对话，单轮 5 秒
+> 成果：ESP32-S3 直连大模型 API，串口实时中英文对话，单轮 3-6 秒
+> 已跑通两家：mimo-v2.5（Anthropic 协议）与 DeepSeek deepseek-flash / deepseek-v4-pro（OpenAI 协议）
+> 客户端已重构为**协议可切换**：换模型只改 CONFIG 里 protocol/api_base/model/api_key 四行
 
 ## 一、故事线（短视频叙事版）
 

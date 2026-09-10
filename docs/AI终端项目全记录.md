@@ -33,7 +33,7 @@
 | 4 | `wlan.scan()` 返回 6 元组 | 固件差异，改索引访问 |
 | 5 | `sorted(key=)` / `decode(errors=)` 不支持 | MicroPython 裁剪版，去关键字参数 |
 | 6 | 5GHz Wi-Fi 完全不可见 | ESP32 只支持 2.4GHz——物理盲区，扫描列表里连名字都没有 |
-| 7 | 热点名拼写陷阱 | 用户报 "xiaomi13ultra"，实际 SSID 是 "Xoami13Ultra"，一切以扫描结果为准 |
+| 7 | 热点名拼写陷阱 | 凭印象拼的热点名连不上，一切以 `wlan.scan()` 扫描结果为准（口述名与实际 SSID 常有出入） |
 | 8 | Response 没有 `.read()` | 这固件用 `r.json()` |
 | 9 | 中文经串口 REPL 被吞成空串 | base64 编码传输，板端 `ubinascii` 解码 |
 | 10 | 推理模型响应慢的错觉 | thinking 模型先思考后输出，6 秒属正常，不是网络问题 |

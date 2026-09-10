@@ -1,4 +1,6 @@
-# ESP32-S3 串口 AI 对话 · Anthropic Messages 协议版（mimo-v2.5）
+# ESP32-S3 串口 AI 对话 · 多协议客户端
+# 支持 OpenAI 兼容协议（DeepSeek/智谱/OpenAI…）与 Anthropic Messages 协议（mimo）
+# 换模型只需改 CONFIG：protocol / api_base / model / api_key
 # 用法：配好 CONFIG 后 import chat; chat.run()
 import gc
 import json
@@ -10,9 +12,13 @@ import urequests
 CONFIG = {
     "wifi_ssid": "你的WiFi名（占位）",
     "wifi_pass": "你的WiFi密码（占位）",
-    "api_base": "https://token-plan-cn.xiaomimimo.com/anthropic",
+
+    # ---- 协议二选一： "openai" 或 "anthropic" ----
+    "protocol": "openai",
+    "api_base": "https://api.deepseek.com",
     "api_key": "你的APIkey（占位）",
-    "model": "mimo-v2.5",
+    "model": "deepseek-flash",
+
     "system": "你是运行在ESP32开发板上的AI助手，回答简洁，不超过150字。",
 }
 
@@ -46,35 +52,56 @@ def scan_wifi():
               "开放" if net[4] == 0 else "加密"))
 
 
+def _post(url, body, headers):
+    r = urequests.post(url, data=body, headers=headers)
+    try:
+        return r.json()
+    finally:
+        r.close()
+
+
 def ask(messages):
-    """调用 Anthropic Messages API，跳过 thinking 块只取正文"""
+    """按 CONFIG['protocol'] 调用对应协议，返回纯文本回复"""
     gc.collect()
-    body = json.dumps({
-        "model": CONFIG["model"],
-        "max_tokens": 1024,
-        "system": CONFIG["system"],
-        "messages": messages,
-    })
-    r = urequests.post(
-        CONFIG["api_base"] + "/v1/messages",
-        data=body,
-        headers={
+    proto = CONFIG.get("protocol", "openai")
+
+    if proto == "anthropic":
+        url = CONFIG["api_base"] + "/v1/messages"
+        body = json.dumps({
+            "model": CONFIG["model"],
+            "max_tokens": 1024,
+            "system": CONFIG["system"],
+            "messages": messages,
+        })
+        headers = {
             "Content-Type": "application/json",
             "x-api-key": CONFIG["api_key"],
             "anthropic-version": "2023-06-01",
-        },
-    )
-    try:
-        obj = r.json()
-    finally:
-        r.close()
-    if "content" not in obj:
+        }
+        obj = _post(url, body, headers)
+        if "content" not in obj:
+            return "[API错误] " + json.dumps(obj)[:200]
+        parts = [b.get("text", "") for b in obj["content"] if b.get("type") == "text"]
+        return "".join(parts) or "(模型只输出了思考没有正文)"
+
+    # 默认 openai 兼容
+    url = CONFIG["api_base"] + "/chat/completions"
+    msgs = [{"role": "system", "content": CONFIG["system"]}] + messages
+    body = json.dumps({
+        "model": CONFIG["model"],
+        "messages": msgs,
+        "max_tokens": 1024,
+    })
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + CONFIG["api_key"],
+    }
+    obj = _post(url, body, headers)
+    if "choices" not in obj:
         return "[API错误] " + json.dumps(obj)[:200]
-    parts = []
-    for blk in obj["content"]:
-        if blk.get("type") == "text":
-            parts.append(blk.get("text", ""))
-    return "".join(parts) or "(模型只输出了思考没有正文)"
+    msg = obj["choices"][0]["message"]
+    # 推理模型会额外返回 reasoning_content，只取正文
+    return msg.get("content") or "(模型只输出了思考没有正文)"
 
 
 def ask_b64(b64_text):
@@ -87,7 +114,7 @@ def ask_b64(b64_text):
 def run():
     connect_wifi()
     history = []
-    print("\n=== ESP32 AI 终端已启动 (mimo-v2.5) ===")
+    print("\n=== ESP32 AI 终端已启动 (%s / %s) ===" % (CONFIG["protocol"], CONFIG["model"]))
     print("=== 输入 /quit 退出 /new 清空历史 ===\n")
     while True:
         try:

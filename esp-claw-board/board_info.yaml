@@ -1,0 +1,5 @@
+board: esp32_s3_moc_2_0
+chip: esp32s3
+version: 1.0.0
+description: "HELLO STEM ESP32-S3 MOC 2.0 Development Board (N16R8)"
+manufacturer: "Huizhou Baiyu Technology"

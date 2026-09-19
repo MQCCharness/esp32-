@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -42,13 +44,13 @@ class TiltUiState {
     var maxAngleDeg by mutableFloatStateOf(25f)
 
     /** 最大模糊半径（像素） */
-    var blurStrengthPx by mutableFloatStateOf(42f)
+    var blurStrengthPx by mutableFloatStateOf(60f)
 
     /** 起雾曲线指数：越小越早起雾（0.55 ≈ 开合全程有明显雾感） */
-    var blurExp by mutableFloatStateOf(0.55f)
+    var blurExp by mutableFloatStateOf(0.3f)
 
     /** 整体雾基底：倾斜时全屏先起一层轻雾，远端再按景深加深（更接近苹果 blend 观感） */
-    var baseFog by mutableFloatStateOf(0.3f)
+    var baseFog by mutableFloatStateOf(0.45f)
 
     /** 液态玻璃感：远端压暗 + 冷色调（对标 iPhone Duo 的玻璃融化观感） */
     var glass by mutableStateOf(true)
@@ -155,7 +157,9 @@ fun computeFoldTransform(state: TiltUiState): FoldTransform {
     val rx = rxRaw.coerceIn(-maxAngle, maxAngle)
     val rz = rzRaw.coerceIn(-maxAngle, maxAngle)
 
-    // 模糊：持续倾角（度）归一化后经起雾曲线；<4° 静音区（手抖/微噪声不产生雾）
+    // 模糊：完全由持续倾角 blurDelta 推导（幅度 + 方向）。
+    // ⚠️ 不能用滞后差量 delta 推导方向——保持倾斜不动时 delta 收敛到 0，
+    // 梯度随之归零，雾会整体消失（历次"保持倾斜却看不到雾"的真根因）。
     val bDeg = Math.toDegrees(b.angle.toDouble()).toFloat()
     val effective = (bDeg - 4f).coerceAtLeast(0f)
     val ampLin = (effective / maxAngle).coerceIn(0f, 1f)
@@ -203,6 +207,17 @@ fun FoldTiltContainer(
     }
     var layerWidth by remember { mutableFloatStateOf(1f) }
     var layerHeight by remember { mutableFloatStateOf(1f) }
+    var lastDrawLogMs by remember { mutableStateOf(0L) }
+
+    // 帧同步节拍器：强制 graphicsLayer 块每 33ms 重新执行，
+    // 不依赖快照失效传播（真机上失效传播不可靠——见历次排查）
+    var drawTick by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            drawTick++
+            delay(33)
+        }
+    }
 
     Box(
         modifier = modifier
@@ -212,12 +227,19 @@ fun FoldTiltContainer(
                 layerHeight = it.height.toFloat().coerceAtLeast(1f)
             }
             .graphicsLayer {
+                // 读取节拍器状态 → 强制本块每帧重新执行， uniforms 始终反映最新 ui 状态
+                drawTick
                 // 绘制阶段只读状态、只写着色器 uniform（不写 Compose 状态，避免重绘死循环）
                 val t = computeFoldTransform(state)
                 rotationY = t.rotationY
                 rotationX = t.rotationX
                 rotationZ = t.rotationZ
                 cameraDistance = state.cameraDistanceFactor * density
+
+                // 关键：全零变换时部分设备/驱动会把图层合并进父级并丢弃 RenderEffect
+                // （实测小米 Mi 10：旋转≠0 时雾可见，旋转=0 时 55px 雾消失）。
+                // 用 0.999 的不可见 alpha 强制保留独立图层。
+                alpha = if (t.blurPx > 0.5f) 0.999f else 1f
 
                 if (shader != null && shaderEffect != null) {
                     shader.setFloatUniform("maxRadius", t.blurPx)
@@ -227,6 +249,17 @@ fun FoldTiltContainer(
                     shader.setFloatUniform("baseFog", state.baseFog)
                     shader.setFloatUniform("glass", if (state.glass) 1f else 0f)
                     renderEffect = shaderEffect
+                    // 诊断：绘制层实际收到的参数（每秒最多 2 条，避免刷屏）
+                    val now = System.currentTimeMillis()
+                    if (now - lastDrawLogMs > 500) {
+                        lastDrawLogMs = now
+                        android.util.Log.d(
+                            "FoldTiltDraw",
+                            "draw blurPx=%.1f grad=(%.2f,%.2f) ry=%.1f alpha=%.3f re=%b".format(
+                                t.blurPx, t.gradX, t.gradY, t.rotationY, alpha, renderEffect != null
+                            )
+                        )
+                    }
                 }
             }
     ) {

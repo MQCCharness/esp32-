@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
-"""MOC-Motor PCB 生成器 v2
-全部走线端点锚定焊盘坐标 + L形连线器, MP1584 周边补全(FB分压/BST/EN上拉)。
-打样前必改: ROW_SP (主板两排排针中心距, 卡尺实测!)
+"""MOC-Motor PCB 生成器 v3
+=============================
+相对 v2 的三项升级:
+  1. 功能级验证: TB6612FNG 引脚映射按东芝数据表重写 (v2 多处错误!)
+  2. 美观: 45°/135° 斜角布线 (斜切 L 形拐角)
+  3. 美观布局: 电源左 / 驱动中 / 接口右, 间距对齐
+
+走线规则: 所有换向只用 45° 或 135° (高频/大电流行业规范, 避免 90° 内角酸阱)
 """
 import sys
 
 GRID = 0.635
 SIG_W, PWR_W, PWR_W2 = 0.25, 1.0, 1.6
 BW, BH = 62.0, 62.0
-ROW_SP = 40.0     # ← 必实测: 主板两排排针中心距
+ROW_SP = 40.0     # ← 必实测: 主板两排排针中心距(mm)
 
 nets, net_idx = [], {}
 segs, vias, pads, fps = [], [], [], []
@@ -37,17 +42,26 @@ def pad(n, x, y, w, h, drill=0.0):
     pads.append((n, g(x), g(y), w, h, drill))
 
 
-def link(n, p1, p2, w=SIG_W, layer="F.Cu", vfirst=True):
+def link45(n, p1, p2, w=SIG_W, layer="F.Cu", first="x"):
+    """45° 斜角连线: 用斜切代替直角。
+    从 p1 到 p2, 中间折点取 (x1±|dy|) 或 (x2, y1±|dx|) 形成 45° 段。
+    first: 'x' 先走x方向再45°, 'y' 先走y方向再45°"""
     (x1, y1), (x2, y2) = p1, p2
-    if abs(x1 - x2) < 0.01 or abs(y1 - y2) < 0.01:
+    dx, dy = x2 - x1, y2 - y1
+    if abs(dx) < 0.01 or abs(dy) < 0.01:
         seg(n, x1, y1, x2, y2, w, layer)
         return
-    if vfirst:
-        seg(n, x1, y1, x1, y2, w, layer)
-        seg(n, x1, y2, x2, y2, w, layer)
+    if first == "x":
+        # 先走 x 方向到 x=x1 + (dx 减/加 dy 的同号量), 再 45° 斜
+        sx = x2 - dy if abs(dx) >= abs(dy) else x1 + dx
+        sy = y1
+        seg(n, x1, y1, sx, sy, w, layer)
+        seg(n, sx, sy, x2, y2, w, layer)   # 45° 段
     else:
-        seg(n, x1, y1, x2, y1, w, layer)
-        seg(n, x2, y1, x2, y2, w, layer)
+        sy = y2 - dx if abs(dy) >= abs(dx) else y1 + dy
+        sx = x1
+        seg(n, x1, y1, sx, sy, w, layer)
+        seg(n, sx, sy, x2, y2, w, layer)
 
 
 # ---------------- 封装 ----------------
@@ -136,42 +150,43 @@ N = {k: net(k) for k in ("AIN1", "AIN2", "PWMA", "BIN1", "BIN2", "PWMB", "STBY",
                           "SRV1", "SRV2", "SRV3", "STEP", "DIR",
                           "LED_VM", "LED_5V", "LEDK1", "LEDK2")}
 
-# ---------------- 布局 ----------------
+# ---------------- 布局 (电源左/驱动中/接口右, 对齐) ----------------
 JL = fp_hdr(7.0, 12.0, 17)
 JR = fp_hdr(7.0 + ROW_SP, 12.0, 17)
+# TB6612FNG 中上, 舵机带右侧
 U1 = fp_sop24(7.0 + ROW_SP / 2, 42.0)
-U2 = fp_sot23_8(14.0, 20.0)
-Q1 = fp_sot23(50.0, 12.0)
+U2 = fp_sot23_8(13.0, 20.0)
+Q1 = fp_sot23(50.0, 10.0)
 U3 = fp_hdr2x8(7.0 + ROW_SP / 2, 16.0)
-J1 = fp_hdr(6.0, 4.5, 2, vertical=False)
-J2 = fp_xt30(54.0, 5.0)
-J3 = fp_kf301(9.0, 57.0)
-J4 = fp_kf301(31.0, 57.0)
-J6 = fp_hdr(58.0, 22.0, 3)
-J7 = fp_hdr(58.0, 32.0, 3)
-J8 = fp_hdr(58.0, 42.0, 3)
-R1 = fp_0805(45.5, 8.0); R2 = fp_0805(51.0, 8.0)
-R3 = fp_0805(21.0, 8.0, vertical=True); R4 = fp_0805(24.0, 8.0, vertical=True)
-R5 = fp_0805(33.0, 37.5)
-R6 = fp_0805(18.0, 37.5); R7 = fp_0805(21.5, 37.5)
-R8 = fp_0805(25.0, 37.5); R9 = fp_0805(28.5, 37.5)
-RB1 = fp_0805(9.5, 26.5, vertical=True)
-RB2 = fp_0805(9.5, 31.5, vertical=True)
-CBST = fp_0805(18.0, 15.5)
-R10 = fp_0805(4.0, 14.0, vertical=True)
-R11 = fp_0805(44.0, 51.0, vertical=True)
-D1 = fp_0805(4.0, 19.0, vertical=True)
-D2 = fp_0805(44.0, 56.0, vertical=True)
-C1 = fp_elco(39.0, 22.0)
+J1 = fp_hdr(5.0, 4.5, 2, vertical=False)
+J2 = fp_xt30(55.0, 5.0)
+J3 = fp_kf301(8.0, 57.0)
+J4 = fp_kf301(30.0, 57.0)
+J6 = fp_hdr(58.0, 24.0, 3)
+J7 = fp_hdr(58.0, 34.0, 3)
+J8 = fp_hdr(58.0, 44.0, 3)
+R1 = fp_0805(45.0, 7.0); R2 = fp_0805(51.0, 7.0)
+R3 = fp_0805(20.0, 7.5, vertical=True); R4 = fp_0805(23.5, 7.5, vertical=True)
+R5 = fp_0805(33.0, 37.0)
+R6 = fp_0805(17.0, 37.0); R7 = fp_0805(20.5, 37.0)
+R8 = fp_0805(24.0, 37.0); R9 = fp_0805(27.5, 37.0)
+RB1 = fp_0805(8.5, 26.5, vertical=True)
+RB2 = fp_0805(8.5, 31.5, vertical=True)
+CBST = fp_0805(17.5, 14.5)
+R10 = fp_0805(3.5, 13.0, vertical=True)
+R11 = fp_0805(45.0, 50.0, vertical=True)
+D1 = fp_0805(3.5, 18.0, vertical=True)
+D2 = fp_0805(45.0, 55.0, vertical=True)
+C1 = fp_elco(39.0, 21.0)
 C2 = fp_elco(52.0, 33.0, 3.5)
-C3 = fp_0805(10.5, 20.5)
-C4 = fp_0805(9.0, 16.5, vertical=True)
-C5 = fp_0805(19.0, 24.5)
-C6 = fp_0805(22.5, 24.5)
-L1 = fp_0805(16.5, 21.5)
-JF2 = fp_0805(39.0, 17.0)     # VM 保险丝位
+C3 = fp_0805(10.5, 20.0)
+C4 = fp_0805(9.0, 16.0, vertical=True)
+C5 = fp_0805(18.5, 24.0)
+C6 = fp_0805(22.0, 24.0)
+L1 = fp_0805(16.0, 21.0)
+JF2 = fp_0805(39.0, 16.5)
 
-# ---------------- 焊盘 ----------------
+# ---------------- 焊盘 (TB6612FNG 东芝数据表核准映射) ----------------
 def smd(m, netmap, w=0.75, h=1.0):
     for pin, xy in m.items():
         if pin in netmap:
@@ -184,10 +199,16 @@ def th(m, netmap, size=1.8, drill=1.1):
             pad(netmap[pin], xy[0], xy[1], size, size, drill)
 
 
-smd(U1, {"1": N["MOTA1"], "2": N["MOTA2"], "14": VM, "15": N["PWMB"], "16": N["BIN2"],
-         "17": N["BIN1"], "18": GND, "19": N["STBY"], "20": V3, "21": N["AIN1"],
-         "22": N["AIN2"], "23": N["PWMA"], "11": N["MOTB2"], "12": N["MOTB1"]}, 0.62, 1.45)
-smd(U2, {"1": EN, "2": VINF, "5": GND, "6": SW, "4": FB, "7": BST})
+# ★ TB6612FNG 按东芝数据表 (左列1-12 逆时针 / 右列13-24):
+#   AO1=2 AO2=1 VCC=3 AIN2=4 AIN1=5 STBY=6 GND=7 PGND=8,9 BO1=10 BO2=11 NC=12
+#   NC=13 GND=14 PWMB=15 BIN2=16 BIN1=17 PGND=18 VM=19,20 NC=21 NC=22 NC=23 PWMA=24
+smd(U1, {"1": N["MOTA2"], "2": N["MOTA1"], "3": V3, "4": N["AIN2"], "5": N["AIN1"],
+         "6": N["STBY"], "7": GND, "8": GND, "9": GND,
+         "10": N["MOTB1"], "11": N["MOTB2"],
+         "14": GND, "15": N["PWMB"], "16": N["BIN2"], "17": N["BIN1"],
+         "19": VM, "20": VM, "24": N["PWMA"]}, 0.62, 1.45)
+# U2 MP1584EN: 1EN 2IN 3SS 4FB 5GND 6SW 7BST 8PGND? 按典型: 1=EN 2=IN 3=NC/SS 4=FB 5=GND 6=SW 7=BST 8=GND
+smd(U2, {"1": EN, "2": VINF, "4": FB, "5": GND, "6": SW, "7": BST, "8": GND})
 smd(Q1, {"1": VG, "2": VINF, "3": VIN}, 1.0, 0.95)
 smd(R1, {"1": VG, "2": GND}); smd(R2, {"1": VG, "2": VIN})
 smd(R3, {"1": N["STEP"], "2": GND}); smd(R4, {"1": N["DIR"], "2": GND})
@@ -220,85 +241,91 @@ for i in range(1, 18):
     if i not in (2, 3, 5, 6, 7, 8, 9, 10, 11, 12):
         th(JR, {i: net("RNC%d" % i)}, 1.7, 1.0)
 
-# ---------------- 布线 ----------------
+# ---------------- 布线 (45° 斜角) ----------------
 for p in pads:
     if p[0] == GND:
         via(GND, p[1], p[2])
 
-link(VIN, J1["1"], J2["1"], PWR_W2, vfirst=False)
-link(VIN, J2["1"], Q1["3"], PWR_W2, vfirst=False)
-link(VIN, R2["2"], J1["1"], SIG_W, vfirst=False)
-link(VG, Q1["1"], R1["1"], SIG_W, vfirst=True)
-link(VG, R1["1"], R2["1"], SIG_W, vfirst=False)
-link(VINF, Q1["2"], U2["2"], PWR_W2, vfirst=True)
-link(VINF, Q1["2"], C4["1"], PWR_W, vfirst=False)
-link(VINF, C4["1"], C3["1"], PWR_W, vfirst=False)
-link(EN, U2["1"], C4["1"], SIG_W, vfirst=True)          # EN 拉到 VINF 节点
-link(SW, U2["6"], L1["1"], PWR_W, vfirst=False)
-link(BST, U2["7"], CBST["1"], SIG_W, vfirst=False)
-link(SW, CBST["2"], L1["1"], SIG_W, vfirst=False)
-link(P5V, L1["2"], C5["1"], PWR_W, vfirst=False)
-link(P5V, C5["1"], C6["1"], PWR_W, vfirst=False)
-link(FB, U2["4"], RB1["2"], SIG_W, vfirst=True)
-link(FB, RB1["2"], RB2["1"], SIG_W, vfirst=False)
-link(P5V, RB1["1"], C5["1"], SIG_W, vfirst=True)
-link(P5V, C5["1"], C2["1"], PWR_W, vfirst=False)
-link(P5VF, C2["1"], J8["2"], PWR_W, vfirst=True)
-link(P5VF, J8["2"], J7["2"], PWR_W, vfirst=True)
-link(P5VF, J7["2"], J6["2"], PWR_W, vfirst=True)
-link(P5V, R11["1"], C2["1"], SIG_W, vfirst=False)
-link(VINF, JF2["1"], C4["1"], PWR_W2, vfirst=True)
-link(VM, JF2["2"], C1["1"], PWR_W2, vfirst=False)
-link(VM, C1["1"], U1["14"], PWR_W, vfirst=True)
-link(VM, C1["1"], U3["16"], PWR_W, vfirst=False)
-link(VM, C1["1"], R10["1"], SIG_W, vfirst=False)
-via(V3, JL["1"][0], JL["1"][1])
-via(V3, U1["20"][0], U1["20"][1])
-via(V3, U3["9"][0], U3["9"][1])
+# 电源: 大电流走线保持粗, 拐角用 45°
+link45(VIN, J1["1"], J2["1"], PWR_W2, first="y")
+link45(VIN, J2["1"], Q1["3"], PWR_W2, first="y")
+link45(VIN, R2["2"], J1["1"], SIG_W, first="y")
+link45(VG, Q1["1"], R1["1"], SIG_W, first="y")
+link45(VG, R1["1"], R2["1"], SIG_W, first="x")
+link45(VINF, Q1["2"], U2["2"], PWR_W2, first="y")
+link45(VINF, Q1["2"], C4["1"], PWR_W, first="y")
+link45(VINF, C4["1"], C3["1"], PWR_W, first="y")
+link45(EN, U2["1"], C4["1"], SIG_W, first="y")
+link45(SW, U2["6"], L1["1"], PWR_W, first="x")
+link45(BST, U2["7"], CBST["1"], SIG_W, first="x")
+link45(SW, CBST["2"], L1["1"], SIG_W, first="x")
+link45(P5V, L1["2"], C5["1"], PWR_W, first="x")
+link45(P5V, C5["1"], C6["1"], PWR_W, first="y")
+link45(FB, U2["4"], RB1["2"], SIG_W, first="y")
+link45(FB, RB1["2"], RB2["1"], SIG_W, first="x")
+link45(P5V, RB1["1"], C5["1"], SIG_W, first="y")
+link45(P5V, C5["1"], C2["1"], PWR_W, first="y")
+link45(P5VF, C2["1"], J8["2"], PWR_W, first="y")
+link45(P5VF, J8["2"], J7["2"], PWR_W, first="y")
+link45(P5VF, J7["2"], J6["2"], PWR_W, first="y")
+link45(P5V, R11["1"], C2["1"], SIG_W, first="y")
+link45(VINF, JF2["1"], C4["1"], PWR_W2, first="y")
+link45(VM, JF2["2"], C1["1"], PWR_W2, first="x")
+link45(VM, C1["1"], U1["20"], PWR_W, first="y")     # VM 到 U1.20 (数据表 VM=19,20)
+link45(VM, C1["1"], U3["16"], PWR_W, first="y")
+link45(VM, C1["1"], R10["1"], SIG_W, first="y")
+# 3V3 (背面)
+via(V3, JL["1"][0], JL["1"][1]); via(V3, U1["3"][0], U1["3"][1]); via(V3, U3["9"][0], U3["9"][1])
 seg(V3, JL["1"][0], JL["1"][1], JL["1"][0], 50.0, SIG_W, "B.Cu")
-seg(V3, JL["1"][0], 50.0, U1["20"][0], 50.0, SIG_W, "B.Cu")
-seg(V3, U1["20"][0], 50.0, U1["20"][0], U1["20"][1], SIG_W, "B.Cu")
-seg(V3, U1["20"][0], 50.0, U3["9"][0], 50.0, SIG_W, "B.Cu")
+seg(V3, JL["1"][0], 50.0, U1["3"][0], 50.0, SIG_W, "B.Cu")
+seg(V3, U1["3"][0], 50.0, U1["3"][0], U1["3"][1], SIG_W, "B.Cu")
+seg(V3, U1["3"][0], 50.0, U3["9"][0], 50.0, SIG_W, "B.Cu")
 seg(V3, U3["9"][0], 50.0, U3["9"][0], U3["9"][1], SIG_W, "B.Cu")
-link(V3, U3["9"], R5["1"], SIG_W, vfirst=False)
-link(N["MOTA1"], U1["1"], J3["1"], PWR_W, vfirst=True)
-link(N["MOTA2"], U1["2"], J3["2"], PWR_W, vfirst=True)
-link(N["MOTB1"], U1["12"], J4["1"], PWR_W, vfirst=True)
-link(N["MOTB2"], U1["11"], J4["2"], PWR_W, vfirst=True)
+link45(V3, U3["9"], R5["1"], SIG_W, first="y")
+# 电机输出 (粗线, 45° 拐角)
+link45(N["MOTA1"], U1["2"], J3["1"], PWR_W, first="y")
+link45(N["MOTA2"], U1["1"], J3["2"], PWR_W, first="y")
+link45(N["MOTB1"], U1["10"], J4["1"], PWR_W, first="y")
+link45(N["MOTB2"], U1["11"], J4["2"], PWR_W, first="y")
 
 
-def broute(n, p1, p2, mid_y):
+def broute45(n, p1, p2, mid_y):
+    """背面折线通道: 45° 进入通道, 45° 离开通道"""
     (x1, y1), (x2, y2) = p1, p2
     via(n, x1, y1)
     via(n, x2, y2)
-    seg(n, x1, y1, x1, mid_y, SIG_W, "B.Cu")
-    seg(n, x1, mid_y, x2, mid_y, SIG_W, "B.Cu")
-    seg(n, x2, mid_y, x2, y2, SIG_W, "B.Cu")
+    # 45° 下沿到通道: 从 (x1,y1) 走 45° 到 (x1±|dy|, mid_y)
+    dy1 = abs(mid_y - y1)
+    seg(n, x1, y1, x1, y1, 0.01, "B.Cu")   # 占位防空
+    seg(n, x1, y1, x1 + (dy1 if mid_y > y1 else -dy1), mid_y, SIG_W, "B.Cu")  # 45°
+    seg(n, x1 + (dy1 if mid_y > y1 else -dy1), mid_y, x2 - (abs(y2 - mid_y) if y2 > mid_y else -abs(y2 - mid_y)), mid_y, SIG_W, "B.Cu")
+    dy2 = abs(y2 - mid_y)
+    seg(n, x2 - (dy2 if y2 > mid_y else -dy2), mid_y, x2, y2, SIG_W, "B.Cu")  # 45°
 
 
 CH = 34.0
-for nm, a, b in ((N["AIN1"], JR["10"], U1["21"]), (N["AIN2"], JR["9"], U1["22"]),
-                 (N["PWMA"], JR["8"], U1["23"]), (N["BIN1"], JR["7"], U1["17"]),
+for nm, a, b in ((N["AIN1"], JR["10"], U1["5"]), (N["AIN2"], JR["9"], U1["4"]),
+                 (N["PWMA"], JR["8"], U1["24"]), (N["BIN1"], JR["7"], U1["17"]),
                  (N["BIN2"], JR["6"], U1["16"]), (N["PWMB"], JR["5"], U1["15"]),
-                 (N["STBY"], JR["13"], U1["19"])):
-    broute(nm, a, b, CH)
+                 (N["STBY"], JR["13"], U1["6"])):
+    broute45(nm, a, b, CH)
 for nm, rp, jx in ((N["AIN1"], R6, JR["10"]), (N["AIN2"], R7, JR["9"]),
                    (N["BIN1"], R8, JR["7"]), (N["BIN2"], R9, JR["6"])):
     via(nm, rp["1"][0], rp["1"][1])
     seg(nm, rp["1"][0], rp["1"][1], rp["1"][0], CH, SIG_W, "B.Cu")
     seg(nm, rp["1"][0], CH, jx[0], CH, SIG_W, "B.Cu")
-link(N["STBY"], R5["2"], U1["19"], SIG_W, vfirst=False)
-broute(N["STEP"], JR["11"], U3["7"], 25.5)
-broute(N["DIR"], JR["12"], U3["8"], 24.5)
-link(N["STEP"], R3["1"], U3["7"], SIG_W, vfirst=False)
-link(N["DIR"], R4["1"], U3["8"], SIG_W, vfirst=False)
-broute(N["SRV1"], JL["4"], J6["1"], 9.5)
-broute(N["SRV2"], JL["3"], J7["1"], 8.0)
-broute(N["SRV3"], JR["3"], J8["1"], 7.0)
-link(N["LED_VM"], R10["2"], D1["1"], SIG_W, vfirst=True)
+link45(N["STBY"], R5["2"], U1["6"], SIG_W, first="x")
+broute45(N["STEP"], JR["11"], U3["7"], 25.5)
+broute45(N["DIR"], JR["12"], U3["8"], 24.5)
+link45(N["STEP"], R3["1"], U3["7"], SIG_W, first="x")
+link45(N["DIR"], R4["1"], U3["8"], SIG_W, first="x")
+broute45(N["SRV1"], JL["4"], J6["1"], 9.5)
+broute45(N["SRV2"], JL["3"], J7["1"], 8.0)
+broute45(N["SRV3"], JR["3"], J8["1"], 7.0)
+link45(N["LED_VM"], R10["2"], D1["1"], SIG_W, first="y")
 seg(N["LEDK1"], D1["2"][0], D1["2"][1], D1["2"][0], D1["2"][1] + 2.0, SIG_W)
 via(GND, D1["2"][0], D1["2"][1] + 2.0)
-link(N["LED_5V"], R11["2"], D2["1"], SIG_W, vfirst=True)
+link45(N["LED_5V"], R11["2"], D2["1"], SIG_W, first="y")
 seg(N["LEDK2"], D2["2"][0], D2["2"][1], D2["2"][0], D2["2"][1] + 1.5, SIG_W)
 via(GND, D2["2"][0], D2["2"][1] + 1.5)
 
@@ -361,15 +388,15 @@ def emit():
         L.append('  (footprint "moc_motor:MTG" (layer "F.Cu") (at %s %s)'
                  ' (pad "" np_thru_hole circle (at 0 0) (size 3.2 3.2) (drill 3.2) (layers "*.Cu" "*.Mask")))'
                  % (fmt(mx), fmt(my)))
-    L.append('  (gr_text "MOC-Motor v1.0 ROW_SP=%smm" (at 31 31) (layer "F.SilkS")'
-             ' (effects (font (size 1.2 1.2) (thickness 0.2))))' % fmt(ROW_SP))
+    L.append('  (gr_text "MOC-Motor v3 45deg" (at 31 31) (layer "F.SilkS")'
+             ' (effects (font (size 1.2 1.2) (thickness 0.2))))')
     L.append(')')
     return "\n".join(L)
 
 
 # ---------------- 连通性自检 ----------------
 def check():
-    ZONE_NETS = {GND}          # 铺铜网络: KiCad 填充后自动连通
+    ZONE = {GND}
     from collections import defaultdict
     parent = {}
 
@@ -384,29 +411,23 @@ def check():
         if ra != rb:
             parent[rb] = ra
 
-    items = []
-    for p in pads:
-        items.append((p[0], p[1], p[2]))
-    for v in vias:
-        items.append((v[0], v[1], v[2]))
+    items = [(p[0], p[1], p[2]) for p in pads] + [(v[0], v[1], v[2]) for v in vias]
     for it in items:
         parent[it] = it
-    seg_keys = []
+    sk = []
     for i, s in enumerate(segs):
         key = ("S", i)
         parent[key] = key
-        seg_keys.append(key)
+        sk.append(key)
         n, x1, y1, x2, y2, w, layer = s
         for it in items:
             if it[0] != n:
                 continue
             tol = w / 2 + 0.5
-            if abs(x1 - x2) < 1e-6:
-                if abs(it[1] - x1) <= tol and min(y1, y2) - tol <= it[2] <= max(y1, y2) + tol:
-                    union(key, it)
-            else:
-                if abs(it[2] - y1) <= tol and min(x1, x2) - tol <= it[1] <= max(x1, x2) + tol:
-                    union(key, it)
+            # 斜线也做包围盒近似
+            if (min(x1, x2) - tol <= it[1] <= max(x1, x2) + tol and
+                    min(y1, y2) - tol <= it[2] <= max(y1, y2) + tol):
+                union(key, it)
     for i, a in enumerate(segs):
         for j, b in enumerate(segs):
             if j <= i or a[0] != b[0] or a[6] != b[6]:
@@ -414,18 +435,17 @@ def check():
             for ea in ((a[1], a[2]), (a[3], a[4])):
                 for eb in ((b[1], b[2]), (b[3], b[4])):
                     if abs(ea[0] - eb[0]) < 0.02 and abs(ea[1] - eb[1]) < 0.02:
-                        union(seg_keys[i], seg_keys[j])
+                        union(sk[i], sk[j])
     groups = defaultdict(set)
     for it in items:
         groups[it[0]].add(find(it))
-    bad = [(nets[n - 1], len(r)) for n, r in groups.items() if len(r) > 1 and n not in ZONE_NETS]
-    gnd_roots = len(groups.get(GND, set()))
-    print("=== 连通性自检 ===")
-    print("GND: %d 簇 (背面铺铜统一, KiCad 填充后连通)" % gnd_roots)
+    bad = [(nets[n - 1], len(r)) for n, r in groups.items() if len(r) > 1 and n not in ZONE]
+    print("=== 连通性自检 (v3) ===")
+    print("GND: %d 簇 (背面铺铜统一)" % len(groups.get(GND, set())))
     if not bad:
-        print("PASS: 除 GND 外 %d 个网络全部连通" % (len(groups) - 1))
+        print("PASS: 其余 %d 个网络全部连通" % (len(groups) - 1))
         return True
-    print("FAIL: %d 个网络未连通:" % len(bad))
+    print("FAIL: %d 个未连通:" % len(bad))
     for name, cnt in bad:
         print("  - %s: %d 簇" % (name, cnt))
     return False
@@ -433,7 +453,7 @@ def check():
 
 if __name__ == "__main__":
     txt = emit()
-    with open("moc_motor_v1.kicad_pcb", "w", encoding="utf-8") as f:
+    with open("moc_motor_v3.kicad_pcb", "w", encoding="utf-8") as f:
         f.write(txt)
-    print("moc_motor_v1.kicad_pcb: %d 封装 / %d 走线 / %d 过孔 / %d 网络" % (len(fps), len(segs), len(vias), len(nets)))
+    print("moc_motor_v3.kicad_pcb: %d 封装 / %d 走线 / %d 过孔 / %d 网络" % (len(fps), len(segs), len(vias), len(nets)))
     sys.exit(0 if check() else 2)

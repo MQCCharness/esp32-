@@ -10,13 +10,13 @@ import time
 import urequests
 
 CONFIG = {
-    "wifi_ssid": "Xoami13Ultra",
-    "wifi_pass": "12345678",
+    "wifi_ssid": "你的WiFi名称",
+    "wifi_pass": "你的WiFi密码",
 
     # ---- 协议二选一： "openai" 或 "anthropic" ----
     "protocol": "openai",
     "api_base": "https://api.deepseek.com",
-    "api_key": "sk-1a5b03e6d68b4884b604e30c16180f46",
+    "api_key": "你的APIkey（占位）",
     "model": "deepseek-flash",
 
     "system": "你是运行在ESP32开发板上的AI助手，回答简洁，不超过150字。",
